@@ -8,7 +8,7 @@ const fetch = require('node-fetch');
 const fs = require('fs').promises;
 
 
-const MODULE_NAME = "Anatomy/Lab4";
+const MODULE_NAME = "Anatomy/Lab6";
 const URL_TEMPLATE_ROOT = `http://emodules.med.utoronto.ca/${MODULE_NAME}/`;
 const URL_DATA_JS_SUFFIX = "html5/data/js/data.js";
 const URL_FRAME_JS_SUFFIX = "html5/data/js/frame.js";
@@ -61,19 +61,20 @@ function getSearchText(slideid, idSearchMap) {
     // const data = JSON.parse(json_);
 
 
-    // parseStoryData(URL_TEMPLATE_ROOT + URL_DATA_JS_SUFFIX).then(
-    //     (json) => {
-    //         fs.writeFile("data.json", JSON.stringify(json, null, "\t"));
-    //     }).catch(console.error);
-    // parseStoryData(URL_TEMPLATE_ROOT + URL_FRAME_JS_SUFFIX).then(
-    //     (json) => {
-    //         fs.writeFile("frame.json", JSON.stringify(json, null, "\t"));
-    //     }).catch(console.error);
-    // parseStoryData(URL_TEMPLATE_ROOT + URL_PATHS_JS_SUFFIX).then(
-    //     (json) => {
-    //         fs.writeFile("paths.json", JSON.stringify(json, null, "\t"));
-    //     }).catch(console.error);
-
+    await Promise.all([
+        parseStoryData(URL_TEMPLATE_ROOT + URL_DATA_JS_SUFFIX).then(
+        (json) => {
+            fs.writeFile("data.json", JSON.stringify(json, null, "\t"));
+        }).catch(console.error),
+        parseStoryData(URL_TEMPLATE_ROOT + URL_FRAME_JS_SUFFIX).then(
+        (json) => {
+            fs.writeFile("frame.json", JSON.stringify(json, null, "\t"));
+        }).catch(console.error),
+        parseStoryData(URL_TEMPLATE_ROOT + URL_PATHS_JS_SUFFIX).then(
+        (json) => {
+            fs.writeFile("paths.json", JSON.stringify(json, null, "\t"));
+        }).catch(console.error)
+    ]);
 
     // parseStoryData("http://emodules.med.utoronto.ca/Anatomy/Lab4/html5/data/js/5XwU8NMXkDF.js").then(
     //     (json) => {
@@ -95,7 +96,7 @@ function getSearchText(slideid, idSearchMap) {
     const idSlideMap = new Map();
     const idSceneMap = new Map();
     const idSearchMap = new Map();
-
+    
     for (const scene of data["scenes"]) {
         idSceneMap.set(scene["id"].split(".").pop(), scene);
         for (const slide of scene["slides"]) {
@@ -103,9 +104,9 @@ function getSearchText(slideid, idSearchMap) {
         }
     }
 
-    for (const [i, search] of frame["navData"]["search"].entries()) {
-        idSearchMap.set(search["slideid"].split(".").pop(), search)
-    }
+    // for (const [i, search] of frame["navData"]["search"].entries()) {
+    //     idSearchMap.set(search["slideid"].split(".").pop(), search)
+    // }
 
     const lines = [
         `<!doctype html>`,
@@ -115,6 +116,7 @@ function getSearchText(slideid, idSearchMap) {
         `<body>`
     ];
     // Print outline from frame
+
     for (const [i, link] of frame["navData"]["outline"]["links"].entries()) {
         console.log(`${i}:\t${link["displaytext"]}`);
         lines.push(`<h1>${link["displaytext"]}</h1>`);
@@ -128,20 +130,23 @@ function getSearchText(slideid, idSearchMap) {
 
             const slide = idSlideMap.get(startingslideid);
             const slideUrl = URL_TEMPLATE_ROOT + slide["html5url"];
-            const slideJson = await parseStoryData(slideUrl);
-
-            if ("slideLayers" in slideJson) {
-                // console.log(slideJson["slideLayers"]);
-                for (const [i, slideLayer] of slideJson["slideLayers"].entries()) {
-                    // lines.push(`<h3>isBaseLayer: ${slideJson["slideLayers"]["isBaseLayer"]}</h3>`);
-                    for (const [j, object] of slideLayer["objects"].entries()) {
-                        try {
-                            lines.push(`<p>${object["data"]["vectorData"]["altText"]}</p>`);
-                        } catch(err) {
-                            lines.push(`<p>${object["accType"]}</p>`);
+            try {
+                const slideJson = await parseStoryData(slideUrl);
+                if ("slideLayers" in slideJson) {
+                    // console.log(slideJson["slideLayers"]);
+                    for (const [i, slideLayer] of slideJson["slideLayers"].entries()) {
+                        // lines.push(`<h3>isBaseLayer: ${slideJson["slideLayers"]["isBaseLayer"]}</h3>`);
+                        for (const [j, object] of slideLayer["objects"].entries()) {
+                            try {
+                                lines.push(`<p>${object["data"]["vectorData"]["altText"]}</p>`);
+                            } catch(err) {
+                                lines.push(`<p>${object["accType"]}</p>`);
+                            }
                         }
                     }
                 }
+            } catch (error) {
+                console.error(`Cannot download ${slide["title"]} at: ${slideUrl}`)
             }
         }
 
@@ -156,20 +161,24 @@ function getSearchText(slideid, idSearchMap) {
                 
                 const slide = idSlideMap.get(slideid);
                 const slideUrl = URL_TEMPLATE_ROOT + slide["html5url"];
-                const slideJson = await parseStoryData(slideUrl);
-
-                if ("slideLayers" in slideJson) {
-                    // console.log(slideJson["slideLayers"]);
-                    for (const [i, slideLayer] of slideJson["slideLayers"].entries()) {
-                        // lines.push(`<h3>isBaseLayer: ${slideJson["slideLayers"]["isBaseLayer"]}</h3>`);
-                        for (const [j, object] of slideLayer["objects"].entries()) {
-                            try {
-                                lines.push(`<p>${object["data"]["vectorData"]["altText"]}</p>`);
-                            } catch(err) {
-                                lines.push(`<p>${object["accType"]}</p>`);
+                
+                try {
+                    const slideJson = await parseStoryData(slideUrl);
+                    if ("slideLayers" in slideJson) {
+                        // console.log(slideJson["slideLayers"]);
+                        for (const [i, slideLayer] of slideJson["slideLayers"].entries()) {
+                            // lines.push(`<h3>isBaseLayer: ${slideJson["slideLayers"]["isBaseLayer"]}</h3>`);
+                            for (const [j, object] of slideLayer["objects"].entries()) {
+                                try {
+                                    lines.push(`<p>${object["data"]["vectorData"]["altText"]}</p>`);
+                                } catch(err) {
+                                    lines.push(`<p>${object["accType"]}</p>`);
+                                }
                             }
                         }
                     }
+                } catch (error) {
+                    console.error(`Cannot download ${slide["title"]} at: ${slideUrl}`)
                 }
             }
         }
