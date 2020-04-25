@@ -1,18 +1,47 @@
 'use strict';
 
-// const http = require("http");
 const vm = require('vm');
-// const jsdom = require("jsdom");
-// const { JSDOM } = jsdom;
+const jsdom = require("jsdom");
+const { JSDOM } = jsdom;
+const http = require('http');
+const https = require('http');
 const fetch = require('node-fetch');
-const fs = require('fs').promises;
+const fs = require('fs-extra');
+const path = require('path');
 
-
-const MODULE_NAME = "Anatomy/Lab6";
+const MODULE_NAME = process.argv.slice(2)[0];
+if (MODULE_NAME.length == 0) {
+    console.error("No argument provided for module name:", MODULE_NAME);
+    throw new Error("Bad arguments" + MODULE_NAME);
+}
+const LOCAL_NAME = MODULE_NAME.replace("/", "_");
+const OUTPUT_DIR = "docs"
 const URL_TEMPLATE_ROOT = `http://emodules.med.utoronto.ca/${MODULE_NAME}/`;
 const URL_DATA_JS_SUFFIX = "html5/data/js/data.js";
 const URL_FRAME_JS_SUFFIX = "html5/data/js/frame.js";
 const URL_PATHS_JS_SUFFIX = "html5/data/js/paths.js";
+const CONTENT_LINK_REGEX = [
+    /"(html5\/.*?)"/g,
+    /"(mobile\/.*?)"/g,
+    /"(story_content\/.*?)"/g
+]
+
+const httpAgent = new http.Agent({
+    keepAlive: true
+});
+const httpsAgent = new https.Agent({
+    keepAlive: true
+});
+ 
+const fetchOptions = {
+    agent: function (_parsedURL) {
+        if (_parsedURL.protocol == 'http:') {
+            return httpAgent;
+        } else {
+            return httpsAgent;
+        }
+    }
+}
 
 async function parseStoryData(url) {
     const response = await fetch(url);
@@ -34,8 +63,7 @@ function getSearchText(slideid, idSearchMap) {
     }
 }
     
-
-(async () => {
+async function main_old() {
 
     // console.log(process.versions);
     // console.log("data.js location: " + URL_TEMPLATE_ROOT + URL_DATA_JS_SUFFIX);
@@ -187,7 +215,7 @@ function getSearchText(slideid, idSearchMap) {
     lines.push("</body>")
     lines.push("")
 
-    await fs.writeFile(`${MODULE_NAME.replace("/", "_")}.html`, lines.join("\n"));
+    await fs.writeFile(`${LOCAL_NAME}.html`, lines.join("\n"));
     
     // for (const [i, scene] of data["scenes"].entries()) {
     //     const slideId = scene["startingSlide"].split(".").pop();
@@ -202,6 +230,105 @@ function getSearchText(slideid, idSearchMap) {
 
     
     return 0;
-})()
+}
+
+
+async function downloadStory(urlTemplateRoot, outputDir, localName) {
+    const localDir = path.join(outputDir, localName);
+    return downloadStoryPage(urlTemplateRoot, localDir, "story_html5.html").then(() => 
+        downloadStoryPage(urlTemplateRoot, localDir, URL_DATA_JS_SUFFIX)
+    ).then(() => 
+        downloadStoryPage(urlTemplateRoot, localDir, URL_FRAME_JS_SUFFIX)
+    ).then(() => 
+        downloadStoryPage(urlTemplateRoot, localDir, URL_PATHS_JS_SUFFIX)
+    );
+}
+
+
+/**
+ * https://stackoverflow.com/a/51302466/6610243
+ * @param {*} url 
+ * @param {*} path 
+ */
+const downloadFile = (async (url, path) => {
+    const res = await fetch(url);
+    const fileStream = fs.createWriteStream(path);
+    return new Promise((resolve, reject) => {
+        res.body.pipe(fileStream);
+        res.body.on("error", (err) => {
+          reject(err);
+        });
+        fileStream.on("finish", function() {
+          resolve();
+        });
+      });
+  });
+
+async function downloadStoryPage(urlTemplateRoot, localDir, page, recursionLevel = 0) {
+    if (recursionLevel > 10) {
+        return;
+    }
+    if (page.endsWith("/")) {
+        return;
+    }
+
+    const url = urlTemplateRoot + page;
+    const file = path.join(localDir, page);
+
+    try {
+        await fs.access(file, fs.constants.R_OK | fs.constants.W_OK);
+        console.log(recursionLevel, "Already exists:", url, "->", file);
+    } catch {
+        console.log(recursionLevel, "Downloading:", url, "->", file);
+        await fs.ensureFile(file);
+        await downloadFile(url, file);
+    }
+
+    if (![".swf", ".mp4", ".jpg", ".png"].includes(path.extname(file))) {
+        console.log(recursionLevel, "Analyzing:", file);
+
+        const text = (await fs.readFile(file)).toString();
+        if (text.length == 0) {
+            console.error("File is empty:", file);
+        }
+
+        const children = [];
+        for (const re of CONTENT_LINK_REGEX) {
+            for (const match of text.matchAll(re)) {
+                children.push(match[1]);
+            }
+        }
+        // console.log("Found the following links:");
+        // children.map(x => console.log("\t", x));
+        for (const child of children) {
+            await downloadStoryPage(urlTemplateRoot, localDir, child, recursionLevel+1);
+        }
+    }
+    // let text = "";
+
+    // try {
+    //     console.log(recursionLevel, "Already exist:", url, "->", file);
+
+    //     text = (await fs.readFile(file)).toString();
+    // } catch (error) {
+    //     console.log(recursionLevel, "Downloading:", url, "->", file);
+
+    //     const response = await fetch(url, fetchOptions);
+    //     await fs.outputFile(file, response.arrayBuffer());
+    //     text = await response.text();
+    // }
+    // console.log(typeof(text));
+    // console.log(text);
+
+    return;
+}
+
+async function main() {
+    await downloadStory(URL_TEMPLATE_ROOT, OUTPUT_DIR, LOCAL_NAME);
+
+    return 0;
+}
+
+main()
 .then(console.log)
 .catch(console.error);
