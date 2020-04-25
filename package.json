@@ -9,6 +9,9 @@
   "author": "Bill",
   "license": "ISC",
   "dependencies": {
-    "node-fetch": "^2.6.0"
+    "base64-arraybuffer": "^0.2.0",
+    "fontkit": "^1.8.0",
+    "node-fetch": "^2.6.0",
+    "opentype.js": "^1.3.1"
   }
 }

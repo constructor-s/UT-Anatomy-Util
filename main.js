@@ -14,6 +14,21 @@ const URL_DATA_JS_SUFFIX = "html5/data/js/data.js";
 const URL_FRAME_JS_SUFFIX = "html5/data/js/frame.js";
 const URL_PATHS_JS_SUFFIX = "html5/data/js/paths.js";
 
+const CHAR_MAPPING = { // The mapping changes between different modules...
+    57344: "f",
+    57345: "ff",
+    57346: "fi",
+    57347: "fl",
+    57348: "ft",
+    57349: "t",
+    57350: "ti",
+    57351: "tt",
+    57352: "tti"
+}
+const CHAR_MAPPING_REGEX = Object.entries(CHAR_MAPPING).map(
+    ([k, v], i) => [new RegExp(String.fromCodePoint(k), 'g'), v]
+)
+
 async function parseStoryData(url) {
     const response = await fetch(url, {
         headers: {
@@ -24,7 +39,50 @@ async function parseStoryData(url) {
 
     const window = {};
     window.globalProvideData = (a1, a2)  => a2; // vm does not support destructuring?
-    const json_ = vm.runInNewContext(text, {window});
+    let json_ = vm.runInNewContext(text, {window});
+    
+    // let json_0 = json_;
+    // // json_ = json_.substring(660, 690);
+    
+    // // console.log(json_.substring(660, 690));
+
+    // How slow is this...?
+    for (const [fr, to] of CHAR_MAPPING_REGEX) {
+        json_ = json_.replace(fr, to);
+    }
+
+    const alreadySeen = [];
+    for (let [i, ch] of Object.entries(json_)) {
+        i = parseInt(i);
+        // console.log(ch);
+        if (ch == undefined) {
+            // console.log(ch, json_.substring(i-5, i+5));
+        } else if (ch.codePointAt() > 50000 && !(ch in alreadySeen)) {
+            alreadySeen.push(ch);
+            // console.log(typeof(json_), i-1, i+1, typeof(i));
+            // console.log(json_.substring(10, 20));
+            console.log(i, ch.codePointAt(), json_.substring(i-20, i+20));
+            // process.exit(-1);
+        }
+    }
+
+
+    // console.log(json_.substring(660, 690));
+    // for (const char of json_.substring(660, 690)) {
+    //     console.log(char, char.codePointAt());
+    // }
+
+    // for (let i = 6; i < 7; i++) {
+    //     let str = json_.substring(0+i*100+60, 100+i*100-10);
+    //     for (const [key, val] of Object.entries(CHAR_MAPPING)) {
+    //         // str = str.replace(String.fromCodePoint(key), val);
+    //     }
+    //     console.log(i, str);
+    //     for (const char of str) {
+    //         console.log(char, char.codePointAt());
+    //     }
+    // }
+
     const json = JSON.parse(json_);
 
     return json;
@@ -151,21 +209,28 @@ function getSlideContent(slide, paths, imageBaseUrl) {
     // const json_ = vm.runInNewContext(text, {window});
     // const data = JSON.parse(json_);
 
-
-    // await Promise.all([
-    //     parseStoryData(URL_TEMPLATE_ROOT + URL_DATA_JS_SUFFIX).then(
-    //     (json) => {
-    //         fs.writeFile("data.json", JSON.stringify(json, null, "\t"));
-    //     }).catch(console.error),
-    //     parseStoryData(URL_TEMPLATE_ROOT + URL_FRAME_JS_SUFFIX).then(
-    //     (json) => {
-    //         fs.writeFile("frame.json", JSON.stringify(json, null, "\t"));
-    //     }).catch(console.error),
-    //     parseStoryData(URL_TEMPLATE_ROOT + URL_PATHS_JS_SUFFIX).then(
+    // await parseStoryData(URL_TEMPLATE_ROOT + URL_PATHS_JS_SUFFIX).then(
     //     (json) => {
     //         fs.writeFile("paths.json", JSON.stringify(json, null, "\t"));
-    //     }).catch(console.error)
-    // ]);
+    //     }).catch(console.error);
+
+    // process.exit(-1);
+    
+
+    await Promise.all([
+        parseStoryData(URL_TEMPLATE_ROOT + URL_DATA_JS_SUFFIX).then(
+        (json) => {
+            fs.writeFile("data.json", JSON.stringify(json, null, "\t"));
+        }).catch(console.error),
+        parseStoryData(URL_TEMPLATE_ROOT + URL_FRAME_JS_SUFFIX).then(
+        (json) => {
+            fs.writeFile("frame.json", JSON.stringify(json, null, "\t"));
+        }).catch(console.error),
+        parseStoryData(URL_TEMPLATE_ROOT + URL_PATHS_JS_SUFFIX).then(
+        (json) => {
+            fs.writeFile("paths.json", JSON.stringify(json, null, "\t"));
+        }).catch(console.error)
+    ]);
 
     // parseStoryData("http://emodules.med.utoronto.ca/Anatomy/Lab4/html5/data/js/5hhMXWxH4mh.js").then(
     //     (json) => {
