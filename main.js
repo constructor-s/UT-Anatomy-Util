@@ -9,9 +9,13 @@ const fetch = require('node-fetch');
 const fs = require('fs-extra');
 const path = require('path');
 
-const MODULE_NAME = "Anatomy/Lab9";
+const MODULE_NAME = process.argv.slice(2)[0];
+if (MODULE_NAME.length == 0) {
+    console.error("No argument provided for module name:", MODULE_NAME);
+    throw new Error("Bad arguments" + MODULE_NAME);
+}
 const LOCAL_NAME = MODULE_NAME.replace("/", "_");
-const OUTPUT_DIR = "output"
+const OUTPUT_DIR = "docs"
 const URL_TEMPLATE_ROOT = `http://emodules.med.utoronto.ca/${MODULE_NAME}/`;
 const URL_DATA_JS_SUFFIX = "html5/data/js/data.js";
 const URL_FRAME_JS_SUFFIX = "html5/data/js/frame.js";
@@ -297,7 +301,7 @@ async function downloadStoryPage(urlTemplateRoot, localDir, page, recursionLevel
         // console.log("Found the following links:");
         // children.map(x => console.log("\t", x));
         for (const child of children) {
-            downloadStoryPage(urlTemplateRoot, localDir, child, recursionLevel+1);
+            await downloadStoryPage(urlTemplateRoot, localDir, child, recursionLevel+1);
         }
     }
     // let text = "";
