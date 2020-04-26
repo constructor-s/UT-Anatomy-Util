@@ -52,7 +52,7 @@ async function processQuizSlide(slide, slideData, moduleFolderRoot) {
     // Parse slideData JSON
     // Find the base layer
     let images = [];
-    let section = undefined;
+    let section = "Quiz";
     const baseLayers = slideData["slideLayers"].filter(layer => layer["isBaseLayer"]);
     if (baseLayers.length != 1) {
         console.error("Expects only one base layer, found:", baseLayers.length);
@@ -75,8 +75,8 @@ async function processQuizSlide(slide, slideData, moduleFolderRoot) {
         section = baseLayer["objects"]
             .filter(obj => "textLib" in obj)
             .map(obj => obj["data"]["vectorData"]["altText"])
-            .filter(text => text.toLowerCase().includes("quiz"))
-            .pop();
+            .filter(text => text.toLowerCase().includes("quiz"));
+        section = section.length >= 1 ? section.pop() : "Quiz";
         // console.log(JSON.stringify(textObjects));
     }
 
