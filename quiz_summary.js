@@ -3,6 +3,7 @@ const path = require("path");
 const jsdom = require("jsdom");
 const { JSDOM } = jsdom;
 const beautify = require('js-beautify').html;
+const glob = require("glob-promise");
 
 async function processScene(scene) {
     // console.log(JSON.stringify(scene));
@@ -11,7 +12,24 @@ async function processScene(scene) {
     }
 }
 
-async function processQuizSlide(slide, slideData) {
+async function processSwfUrl(url, moduleFolderRoot) {
+    const urlParts = url.split("/");
+    const filename = urlParts[urlParts.length - 1];
+    if (urlParts[0] == "story_content" && 
+        path.extname(filename) == ".swf") {
+        urlParts[0] = "mobile";
+        urlParts[urlParts.length - 1] = path.parse(filename).name + "*.png";
+        const fullpath = (await glob(path.join(moduleFolderRoot, urlParts.join("/")))).pop(); // Assumes there is only one match or whatever the last match is
+        urlParts[urlParts.length - 1] = path.basename(fullpath);
+        const newUrl = urlParts.join("/");
+        console.log("Converted resource link:", url, "->", newUrl);
+        return newUrl;
+    } else {
+        return url;
+    }
+}
+
+async function processQuizSlide(slide, slideData, moduleFolderRoot) {
     const title = slide["title"];
     const texts = [slide["interactions"][0]["lmstext"]];
     let choices;
@@ -42,7 +60,15 @@ async function processQuizSlide(slide, slideData) {
         const baseLayer = baseLayers.pop();
         const imageObjects = baseLayer["objects"].filter(obj => obj["kind"] == "image");
         images = imageObjects.map(obj => path.join("mobile", obj["data"]["html5data"]["url"]));
-        
+
+        const imageObjectsSwf = baseLayer["objects"]
+            .filter(obj => "imagelib" in obj)
+            .map(obj => obj["imagelib"][0]["url"]);
+        const imageObjectsPng = await Promise.all(
+            imageObjectsSwf.map(url => processSwfUrl(url, moduleFolderRoot))
+        );
+        images.push(...imageObjectsPng);
+
         section = baseLayer["objects"]
             .filter(obj => "textLib" in obj)
             .map(obj => obj["data"]["vectorData"]["altText"])
@@ -81,12 +107,12 @@ async function processQuizSlide(slide, slideData) {
     };
 }
 
-async function processQuiz(quiz, slidesIndex, jsonFolderRoot) {
+async function processQuiz(quiz, slidesIndex, jsonFolderRoot, moduleFolderRoot) {
     return await Promise.all(quiz["sliderefs"].map(async ref => {
         const slide = slidesIndex.get(ref["id"].split(".").pop());
         const slideData = await fs.readJson(path.join(jsonFolderRoot, slide["html5url"]+"on")); // convert .js to .json
         return processQuizSlide(
-            slide, slideData
+            slide, slideData, moduleFolderRoot
         )
     }));
 }
@@ -103,7 +129,7 @@ async function generateQuizSummary(moduleFolderRoot, jsonFolderRoot) {
     })
 
     const quizzes = data["quizzes"].filter(quiz => "sliderefs" in quiz);
-    const quizzesProcessed = await Promise.all(quizzes.map(quiz => processQuiz(quiz, slidesIndex, jsonFolderRoot)));
+    const quizzesProcessed = await Promise.all(quizzes.map(quiz => processQuiz(quiz, slidesIndex, jsonFolderRoot, moduleFolderRoot)));
     
     const dom = new JSDOM(await fs.readFile("quiz_summary.html"));
     const document = dom.window.document;
@@ -111,17 +137,25 @@ async function generateQuizSummary(moduleFolderRoot, jsonFolderRoot) {
     const elem = document.createElement("h1");
     elem.appendChild(document.createTextNode(document.title));
     document.body.appendChild(elem);
-    for (const qGroup of quizzesProcessed) {
+    
+    const nav = document.createElement("nag");
+    document.body.appendChild(nav);
+
+    const toc = document.createElement("ol");
+    nav.appendChild(toc);
+
+    for (const [i, qGroup] of quizzesProcessed.entries()) {
+        let groupTitle = `Quiz ${i}`; // default value, shouled be changed to q["section"]
+
         const qGroupTitle = document.createElement("h2");
-        const qGroupTextNode = document.createTextNode("Quiz");
-        qGroupTitle.appendChild(qGroupTextNode);
         document.body.appendChild(qGroupTitle);
         
         const elem = document.createElement("section");
         elem.className = "question-group";
         document.body.appendChild(elem);
+
         for (const q of qGroup) {
-            qGroupTitle.textContent = q["section"];
+            groupTitle = q["section"];
 
             const qElem = document.createElement("div");
             qElem.className = "question";
@@ -192,6 +226,18 @@ async function generateQuizSummary(moduleFolderRoot, jsonFolderRoot) {
             });
             qElem.appendChild(comments);
         }
+
+        qGroupTitle.textContent = groupTitle;
+        const id = groupTitle.split(/\W/g).join("").toLowerCase();
+        qGroupTitle.setAttribute("id", id);
+        
+        
+        const item = document.createElement("li");
+        const link = document.createElement("a");
+        link.setAttribute("href", `#${id}`);
+        link.textContent = groupTitle;
+        item.appendChild(link);  
+        toc.appendChild(item);
     }
 
     // console.log(dom.serialize());
