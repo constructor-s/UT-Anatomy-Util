@@ -57,9 +57,10 @@ async function processQuizSlide(slide, slideData, moduleFolderRoot) {
     if (baseLayers.length != 1) {
         console.error("Expects only one base layer, found:", baseLayers.length);
     } else {
+        const flattenObjgroup = obj => "objects" in obj ? obj["objects"].flatMap(flattenObjgroup) : obj;
         const baseLayer = baseLayers.pop();
         const imageObjects = baseLayer["objects"]
-            .flatMap(obj => "objects" in obj ? obj["objects"] : obj)
+            .flatMap(flattenObjgroup)
             .filter(obj => obj["kind"] == "image");
         images = imageObjects.map(obj => path.join("mobile", obj["data"]["html5data"]["url"]));
 
