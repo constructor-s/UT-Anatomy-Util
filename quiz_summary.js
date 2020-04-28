@@ -20,6 +20,10 @@ async function processSwfUrl(url, moduleFolderRoot) {
         urlParts[0] = "mobile";
         urlParts[urlParts.length - 1] = path.parse(filename).name + "*.png";
         const fullpath = (await glob(path.join(moduleFolderRoot, urlParts.join("/")))).pop(); // Assumes there is only one match or whatever the last match is
+        if (!fullpath) {
+            console.warn("Cannot find corresponding PNG file for:", url);
+            return url;
+        }
         urlParts[urlParts.length - 1] = path.basename(fullpath);
         const newUrl = urlParts.join("/");
         console.log("Converted resource link:", url, "->", newUrl);
