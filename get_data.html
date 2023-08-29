@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <!-- Create a form input text box to be handled with JavaScript: -->
+    <!-- Do not reload the page when submitted. Call the function called onAddScript. -->
+    <form>
+        <input type="text" name="url" id="url" size="100">
+        <input type="button" value="Add Script" onclick="onAddScript()">
+        <input type="button" value="Download Data" onclick="onDownloadData()">
+    </form>
+
+    <script>
+        "use strict";
+
+        // Create a function called window.globalProvideData
+        // with two arguments. Ignore the first argument. 
+        // Parse the second argument as a JSON string and 
+        // store the result in a global variable named data
+        function globalProvideData(_, data) {
+            window.data = JSON.parse(data);
+        }
+
+        function onAddScript() {
+            const url = document.getElementById("url").value;
+            const script = document.createElement('script');
+            script.src = url;
+            document.body.appendChild(script);
+        }
+
+        function onDownloadData() {
+            // Prompt user to download window.data as a JSON file
+            const data = JSON.stringify(window.data);
+            const blob = new Blob([data], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'data.json';
+            a.click();
+            
+        }
+    </script>
+</body>
+</html>
